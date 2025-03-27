@@ -1,0 +1,41 @@
+e = [
+    # Existing easy tasks
+    "List all products with their names and prices, sorted alphabetically by name.",
+    "Find all users under 30 years old, showing their full name and age.",
+    "Count how many orders were placed in March 2025.",
+    "Show all orders with their dates and the corresponding user's last name.",
+    "Calculate the total number of units sold for each product, ordered by units sold descending.",
+    "List all users with their registration dates, sorted by registration date ascending.",
+    "Find products priced above $100, showing name and price.",
+    "Count the total number of users in the database.",
+    "Show all orders placed on 2025-05-15 with their order IDs and user IDs.",
+    "List product names containing the word 'Premium' in their description."
+]
+
+m = [
+    # Existing medium tasks
+    "Find products that have never been ordered, showing product name and price.",
+    "Calculate the average order value (total revenue divided by order count) for 2025.",
+    "List users who haven't placed any orders in 2025, showing their names and registration dates.",
+    "Find the most popular product by units sold in each month of 2025, showing month and product name.",
+    "Calculate the percentage of users who placed at least one order in 2025.",
+    "Find users who ordered product 'X' (specific product name) in 2025, showing user name and order dates.",
+    "Calculate total revenue per user for 2025, ordered by revenue descending.",
+    "List products with average units per order greater than 5.",
+    "Find the month with the highest number of orders in 2025.",
+    "Identify users who placed orders in consecutive months during 2025."
+]
+
+h = [
+    # Existing hard tasks
+    "Write a PostgreSQL query to find the top 5 most profitable products in 2025, calculated by total revenue (price × units sold), including the product name, total units sold, and total revenue. Sort by revenue in descending order.",
+    "Generate a SQL query that lists all users who purchased more than 3 different products in a single order during May 2025, showing user name (first + last), order date, and count of distinct products.",
+    "Create a query to identify products that appear in at least 50% of all orders placed by users under 25 years old, showing product name and appearance percentage (calculated as: (count of qualifying orders containing product / total qualifying orders)*100).",
+    "Write a query comparing monthly sales trends in 2025 showing: month name (e.g., 'January'), total orders, total units sold, and average order value formatted as currency (e.g., $1,234.56).",
+    "Find users whose average order value is in the top 10% percentile and who placed ≥2 orders in Q2 2025 (April-June), displaying: user_id, full name, order count, average order value, and exact percentile rank (formatted as 'Top X%').",
+    "Calculate quarterly revenue growth percentages for 2025 compared to previous quarter.",
+    "Identify products that are consistently in the top 3 selling products every month of 2025.",
+    "Find users with above-average order frequency but below-average order values.",
+    "Calculate customer lifetime value (CLV) based on 2025 data, assuming a 12-month retention period.",
+    "Identify products that have never been purchased by users over 40 years old, but are popular with users under 25."
+]
