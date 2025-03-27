@@ -9,6 +9,7 @@ from data import db_info
 from langchain_ollama import ChatOllama
 import ollama
 from llm import askMistral, model
+from db_connector import do_db_retrieve, do_db_insert
 app = Flask(__name__)
 
 llm_model = llm.model
