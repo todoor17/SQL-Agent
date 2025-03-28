@@ -23,6 +23,8 @@ class State(TypedDict):
     correct: bool
     suggested_new_query: str
     sql_answer: str
+    insert_status: str
+    missing_fields: bool
 
 template_prompt = """
 This is the user's prompt: {initial_prompt}. 
@@ -36,6 +38,15 @@ Examples:
 - *RETRIEVE*     
 - *ERROR*
 """
+
+
+def get_query(state: State):
+    if not state["missing_fields"]:
+        state["prompt"] = input("Enter your prompt: ")
+        return state
+    else:
+        state["prompt"] = input("Enter your prompt. Your previous insert prompt had missing fields:\n")
+        return state
 
 
 def check_query_type(state: State):
@@ -66,27 +77,49 @@ def do_type_route(state: State):
 
 
 template_prompt_1 = """
-You are a PostgreSQL prompts solver.
-This is the user's prompt: {initial_prompt}
-This is the database structure: {db_info}
-If there is content in the suggested_new_query: {suggested_new_query}, it means that an attempt was already made. Check the content of that and take that into consideration.
-Otherwise, if suggested_new_query is empty, just ignore it.
+# PostgreSQL Query Generation Prompt
 
-I want you to create a PostgreSQL query that solves the prompt. 
+"I need a PostgreSQL query that fulfills this request: {initial_prompt}
 
-STEPS:
-1. Read the database structure.
-2. Check the user's prompt and the enhanced prompt and decide what to do.
-2.1 (Optional Step, just if there is content in suggested_new_query). Take into consideration the content of suggested_new_query.
-3. Be careful to use only tables and columns from {db_info}. Also, make sure there is a valid link between the tables and columns you use.
-4. Make sure you use valid aliases in a valid way. Also, make sure you use only valid PostgreSQL keywords and functions.
-5. Provide JUST THE POSTGRESQL QUERY. !Important! No markdowns, headers, or other explanations. I want only the SQL query.
+## Database Context
+Available tables:
+- users (user_id, first_name, last_name, age, registration_date)
+- products (product_id, product_name, product_desc, price)
+- orders (order_id, user_id, date)
+- orders_content (orders_content_id, order_id, product_id, units)
+
+Relationships:
+- orders.user_id → users.user_id
+- orders_content.order_id → orders.order_id
+- orders_content.product_id → products.product_id
+
+## Goal
+- Create a valid PostgreSQL query matching the user's request
+- Use only the specified tables/columns with proper joins
+- Validate all foreign key relationships
+- Return ONLY the raw SQL query (no explanations)
+
+## Return Format
+A single PostgreSQL query in plain text format
+
+## Warnings
+- Reject any tables/columns not in the provided schema
+- Ensure proper joins using the documented relationships
+- Validate date constraints (orders only cover 2025)
+- Check age non-negativity requirements
+- Handle decimal precision for price calculations
+
+## Context Dump
+User seeks data about: {initial_prompt}
+Special considerations: 
+- Order dates strictly within 2025
+- Age must be non-negative
+- Price calculations need proper decimal handling
 """
 
-
 def do_retrieve(state: State):
-    prompt = template_prompt_1.format(initial_prompt=state['prompt'], db_info=db_info, suggested_new_query=state['suggested_new_query'])
-    llm_result = askMistral(prompt)
+    retrieve_prompt = template_prompt_1.format(initial_prompt=state['prompt'], db_info=db_info, suggested_new_query=state['suggested_new_query'])
+    llm_result = askMistral(retrieve_prompt)
     print(llm_result)
     print("\n")
 
@@ -110,11 +143,41 @@ def do_retrieve_route(state: State):
 
 
 template_prompt_2 = """
-This is the user's prompt: {initial_prompt}
-This is the PostgreSQL query solution I have: {answer}
-Will my query produce the expected output? 
-Answer with yes / no on the first row. Please do not insert a space between the first and the second row.
-On the second row, do an explanation about the thing that causes the error and suggest a fix.
+# Query Validation Prompt
+
+"I need to verify if this PostgreSQL query: {answer}
+accurately solves: {initial_prompt}
+
+## Database Context
+Available tables:
+- users (user_id, first_name, last_name, age, registration_date)
+- products (product_id, product_name, product_desc, price)
+- orders (order_id, user_id, date)
+- orders_content (orders_content_id, order_id, product_id, units)
+
+## Goal
+- Confirm query matches all user requirements
+- Identify schema mismatches or logic errors
+- Validate all joins and constraints
+- Check for proper date filtering (2025 only)
+
+## Return Format
+First line: 'yes' or 'no' 
+Second line: Error explanation (if 'no') + fix suggestion
+
+## Warnings
+- Flag incorrect table/column references
+- Catch invalid joins missing relationship paths
+- Verify date constraints (orders.date must be in 2025)
+- Check age non-negativity enforcement
+- Validate decimal handling for price calculations
+
+## Context Dump
+Query purpose: {initial_prompt}
+Critical constraints:
+- All order dates must be in 2025
+- User ages cannot be negative
+- Price calculations require precision
 """
 
 
@@ -144,7 +207,12 @@ def check_correctness_route(state: State):
 
 
 def do_insert(state: State):
-    pass
+    try:
+        do_db_insert(state["sql_answer"])
+        state["insert_status"] = "SUCCESS"
+    except Exception as e:
+        state["insert_status"] = "ERROR"
+
 
 
 template_prompt_3 = """
@@ -156,7 +224,7 @@ In one line, compute a conclusion success message.
 
 def print_result(state: State):
     print("\nthe program entered the print_state\n")
-    print_prompt = template_prompt_3.format(initial_prompt=state["prompt"])
+    print_prompt = template_prompt_3.format(initial_prompt=state["prompt"], db_info=db_info)
     print_response = llm_model.invoke(print_prompt).content
     print(print_response)
 
@@ -167,13 +235,15 @@ def print_result(state: State):
 
 
 builder = StateGraph(State)
+builder.add_node("get_query", get_query)
 builder.add_node("check_query_type", check_query_type)
 builder.add_node("do_retrieve", do_retrieve)
 builder.add_node("check_correctness", check_correctness)
 builder.add_node("do_insert", do_insert)
 builder.add_node("print_result", print_result)
 
-builder.add_edge(START, "check_query_type")
+builder.add_edge(START, "get_query")
+builder.add_edge("get_query", "check_query_type")
 builder.add_conditional_edges("check_query_type", do_type_route, {
     "RETRIEVE": "do_retrieve",
     "INSERT": "do_insert",
@@ -185,8 +255,6 @@ builder.add_conditional_edges("do_retrieve", do_retrieve_route, {
     "SUCCESS": "check_correctness"
 })
 
-# builder.add_edge("check_correctness", END)
-
 builder.add_conditional_edges("check_correctness", check_correctness_route, {
     "CORRECT": "print_result",
     "INCORRECT": "do_retrieve"
@@ -194,13 +262,9 @@ builder.add_conditional_edges("check_correctness", check_correctness_route, {
 
 builder.add_edge("print_result", END)
 
-# keyboard_prompt = input("Enter your prompt: ")
-keyboard_prompt = "what is the average order cost?"
-keyboard_prompt1 = "whats the age of user with id 20?"
-keyboard_prompt2 = "insert a user with age 20 and name Todor"
-keyboard_prompt3 = "what is the color of the sky?"
+keyboard_prompt = input("Enter your prompt: ")
 
-initial_state = {"prompt": keyboard_prompt, "database_info": db_info, "type": "", "answer": "", "correct": "", "suggested_new_query": ""}
+initial_state = {"database_info": db_info, "type": "", "answer": "", "correct": "", "suggested_new_query": "", "missing_fields": False}
 
 graph = builder.compile()
 
